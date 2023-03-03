@@ -12,7 +12,7 @@ from flask import Flask, jsonify
 ################################################
 # Database Setup
 #################################################
-engine = create_engine("sqlite:////Resources/hawaii.sqlite")
+engine = create_engine("sqlite:////Users/ginaleonardi/Documents/sqlalchemy-challenge/Instructions/Resources/hawaii.sqlite")
 
 # reflect an existing database into a new model
 Base = automap_base()
@@ -44,37 +44,98 @@ def welcome():
         f'/api/v1.0/<start>/<end>'
     )
 
-@app.route('/api/v1.0/precipitation<br/>')
+@app.route('/api/v1.0/precipitation')
 def precipitation():
     #Open Python session to database
     session = Session(engine)
 
     #Query for 12 months of precipitation
-    precipitation_data = session.query(measurement.date, measurement.prcp).filter(measurement.date >= last_year_date).all()
+    recent_date = session.query(measurement.date).order_by(measurement.date.desc()).first()
+    last_year_date = (dt.datetime.strptime(recent_date[0],'%Y-%m-%d') - dt.timedelta(days=365)).strftime('%Y-%m-%d')
+    results = session.query(measurement.date, measurement.prcp).filter(measurement.date >= last_year_date).all()
     #Create dictionary and add values from precipitation_data query
-    date_list = []
+    precipitation_list = []
 
-    for date, prcp in precipitation_data:
-        results_dict = {}
-        new_dict[date] = prcp
-        date_list.append(results_dict)
-
-    session.close()
-
+    for row in results:
+        date_dict = {}
+        date_dict[row.date] = row.prcp
+        precipitation_list.append(date_dict)
+    
     #Return to api
-    return jsonify(date_list)
+    return jsonify(precipitation_list)
 
-@app.route('/api/v1.0/stations<br/>')
+@app.route('/api/v1.0/stations')
 def stations():
+    #Open Python session to database
+    session = Session(engine)
 
+    #Generate and return a list of stations
+    results = session.query(station.station).all()
 
-@app.route('/api/v1.0/tobs<br/>')
+    #Convert to normal list
+    station_list = list(np.ravel(results))
+    
+    return jsonify(station_list)
+
+@app.route('/api/v1.0/tobs')
 def tobs():
+    #Open Python session to database
+    session = Session(engine)
+    
+    #Save calculated varibles
+    recent_date = session.query(measurement.date).order_by(measurement.date.desc()).first()
+    last_year_date = (dt.datetime.strptime(recent_date[0],'%Y-%m-%d') - dt.timedelta(days=365)).strftime('%Y-%m-%d')
 
+    #Query the dates and temperature observations of the most-active station for the previous year of data.
+    results = session.query(measurement.date, measurement.tobs).filter(measurement.station == 'USC00519281').filter(measurement.date >= last_year_date).all()
+    
+    #Convert to normal list
+    most_active_data = list(np.ravel(results))
+    
+    return jsonify(most_active_data)
 
-@app.route('/api/v1.0/<start><br/>')
-def start_temp_range():
+@app.route("/api/v1.0/<start>")
+def temp_range_start(start):
 
+    #Open Python session to database
+    session = Session(engine)
+    #Query to find the min, max, average for specified date
+    results = session.query(measurement.date, func.min(measurement.tobs), func.avg(measurement.tobs), func.max(measurement.tobs).filter(measurement.date >= start).group_by(measurement.date).all()
+    session.close()  
 
-@app.route('/api/v1.0/<start>/<end>')
-def start_end_temp_range():
+    #Iterate through results to add dictionaries to array
+    temp_list = []
+    for date, min, max, avg in results:
+        data_dict = {}
+        data_dict["Date"] = date
+        data_dict["TMIN"] = min
+        data_dict["TMAX"] = max
+        data_dict["TAVG"] = avg
+        temp_list.append(data_dict)
+  
+    return jsonify(temp_list)
+
+@app.route("/api/v1.0/<start>/<end>")
+def temp_range_start_end(start, end):
+
+    #Open Python session to database
+    session = Session(engine)
+    #Query to find the min, max, average for specified date ranges
+    results = session.query(measurement.date, func.min(measurement.tobs), func.avg(measurement.tobs), func.max(measurement.tobs).filter(measurement.date >= start, measurement.date <= end).group_by(Measurement.date).all()
+    session.close()    
+
+    #Iterate through results to add dictionaries to array
+    temp_list = []
+    for date, min, max, avg in results:
+        data_dict = {}
+        data_dict["Date"] = date
+        data_dict["TMIN"] = min
+        data_dict["TMAX"] = max
+        data_dict["TAVG"] = avg
+        temp_list.append(data_dict)
+
+    return jsonify(temp_list)
+
+#Call Flask to run
+if __name__ == '__main__':
+    app.run(debug=True)
